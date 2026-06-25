@@ -2,15 +2,15 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://YOUR_BACKEND_DOMAIN/api/$1"
+      "destination": "https://whatsapp-broadcast-98jt.onrender.com/api/$1"
     },
     {
       "source": "/uploads/(.*)",
-      "destination": "https://YOUR_BACKEND_DOMAIN/uploads/$1"
+      "destination": "https://whatsapp-broadcast-98jt.onrender.com/uploads/$1"
     },
     {
       "source": "/socket.io/(.*)",
-      "destination": "https://YOUR_BACKEND_DOMAIN/socket.io/$1"
+      "destination": "https://whatsapp-broadcast-98jt.onrender.com/socket.io/$1"
     },
     {
       "source": "/(.*)",
