@@ -1,21 +1,21 @@
 FROM node:20-slim
 
-# Install Google Chrome stable and its dependencies for Puppeteer headless Chrome
-RUN apt-get update && apt-get install -y \
+# Install Google Chrome stable and required dependencies for Puppeteer
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
     wget \
     gnupg \
-    ca-certificates \
-    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
-    && apt-get update && apt-get install -y \
+    && mkdir -p /etc/apt/keyrings \
+    && wget -q -O /etc/apt/keyrings/google-linux-signing-key.gpg https://dl.google.com/linux/linux_signing_key.pub \
+    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-linux-signing-key.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
     google-chrome-stable \
     fonts-ipafont-gothic \
     fonts-wqy-zenhei \
     fonts-thai-tlwg \
-    fonts-kalthout \
     fonts-freefont-ttf \
     libxss1 \
-    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Environment variables to run Puppeteer with system-installed Chrome
