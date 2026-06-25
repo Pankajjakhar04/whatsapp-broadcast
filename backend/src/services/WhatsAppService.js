@@ -53,7 +53,8 @@ export const initWhatsAppClient = async (userId) => {
   emitToUser(userIdStr, 'whatsapp-status', { status: 'Connecting', qrCode: '' });
 
   // Setup Puppeteer options
-  const headless = process.env.PUPPETEER_HEADLESS === 'true';
+  const headlessEnv = (process.env.PUPPETEER_HEADLESS ?? 'true').toString().trim().toLowerCase();
+  const headless = !['false', '0', 'no'].includes(headlessEnv);
   const puppeteerArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'];
   const puppeteerOptions = {
     headless,
