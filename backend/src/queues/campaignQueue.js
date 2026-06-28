@@ -13,19 +13,28 @@ export const campaignQueue = new Queue('campaignQueue', {
   connection: redisConfig,
 });
 
+const campaignWorkerConcurrency = Number.parseInt(process.env.CAMPAIGN_WORKER_CONCURRENCY ?? '1', 10);
+const safeCampaignWorkerConcurrency = Number.isFinite(campaignWorkerConcurrency) && campaignWorkerConcurrency > 0
+  ? campaignWorkerConcurrency
+  : 1;
+
 /**
  * Add a campaign processing job to the queue
  */
 export const addCampaignJob = async (campaignId) => {
+  const campaignIdStr = campaignId.toString();
+
   await campaignQueue.add(
-    `process-campaign-${campaignId}`,
-    { campaignId },
+    `process-campaign-${campaignIdStr}`,
+    { campaignId: campaignIdStr },
     {
-      jobId: campaignId.toString(),
+      jobId: campaignIdStr,
       removeOnComplete: true,
       removeOnFail: false,
     }
   );
+
+  console.log(`Enqueued campaign job: ${campaignIdStr}`);
 };
 
 // Helper delay function
@@ -35,7 +44,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 export const campaignWorker = new Worker(
   'campaignQueue',
   async (job) => {
-    const { campaignId } = job.data;
+    const campaignId = job.data.campaignId?.toString?.() ?? String(job.data.campaignId);
     console.log(`Starting worker for campaign: ${campaignId}`);
 
     // Fetch the campaign
@@ -249,7 +258,7 @@ export const campaignWorker = new Worker(
   },
   {
     connection: redisConfig,
-    concurrency: 5, // Process up to 5 campaigns in parallel for different users
+    concurrency: safeCampaignWorkerConcurrency,
   }
 );
 
