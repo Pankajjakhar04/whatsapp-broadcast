@@ -1,6 +1,34 @@
 import xlsx from 'xlsx';
 import { z } from 'zod';
 
+const normalizePhoneCellValue = (value) => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  let raw = '';
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      return '';
+    }
+    raw = Math.trunc(value).toString();
+  } else {
+    raw = String(value).trim();
+  }
+
+  raw = raw.replace(/^'+/, '').replace(/\.0+$/, '').trim();
+
+  // Handle scientific notation values like 9.18757E+11 from CSV/Excel exports.
+  if (/^[+-]?(?:\d+\.?\d*|\.\d+)[eE][+-]?\d+$/.test(raw)) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) {
+      raw = Math.trunc(parsed).toString();
+    }
+  }
+
+  return raw.replace(/[^0-9]/g, '');
+};
+
 // Schema for validating individual contact rows
 const contactRowSchema = z.object({
   phoneNumber: z.string().min(8, 'Phone number too short').max(15, 'Phone number too long'),
@@ -25,7 +53,7 @@ export const uploadContacts = async (req, res) => {
     
     // Parse worksheet to JSON array of arrays or objects
     // header: 1 returns 2D array, which is safer for varying header names
-    const rawRows = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
+    const rawRows = xlsx.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: '' });
 
     if (rawRows.length < 2) {
       return res.status(400).json({ message: 'The uploaded file is empty or missing data rows' });
@@ -56,7 +84,7 @@ export const uploadContacts = async (req, res) => {
       const row = rawRows[r];
       if (!row || row.length === 0) continue; // skip empty rows
 
-      const rawPhone = String(row[phoneIdx] || '').trim();
+      const rawPhone = row[phoneIdx];
       const rawName = nameIdx !== -1 ? String(row[nameIdx] || '').trim() : '';
       const rawCompany = companyIdx !== -1 ? String(row[companyIdx] || '').trim() : '';
       const rawCity = cityIdx !== -1 ? String(row[cityIdx] || '').trim() : '';
@@ -65,7 +93,7 @@ export const uploadContacts = async (req, res) => {
       if (!rawPhone && !rawName && !rawCompany && !rawCity) continue;
 
       // Clean phone number (keep only digits)
-      const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+      const cleanPhone = normalizePhoneCellValue(rawPhone);
 
       // Validation
       if (!cleanPhone || cleanPhone.length < 9 || cleanPhone.length > 15) {

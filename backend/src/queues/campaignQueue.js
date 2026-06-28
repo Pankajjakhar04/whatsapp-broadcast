@@ -39,6 +39,12 @@ export const addCampaignJob = async (campaignId) => {
 
 // Helper delay function
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sendRetryDelayMs = Number.parseInt(process.env.CAMPAIGN_SEND_RETRY_DELAY_MS ?? '2000', 10);
+
+const isProtocolTimeoutError = (err) => {
+  const message = err?.message?.toLowerCase?.() ?? '';
+  return message.includes('runtime.callfunctionon timed out') || message.includes('protocoltimeout');
+};
 
 // Worker definition
 export const campaignWorker = new Worker(
@@ -167,9 +173,36 @@ export const campaignWorker = new Worker(
           await client.sendMessage(chatId, personalizedMessage);
         }
       } catch (err) {
-        console.error(`Failed to send to ${contact.phoneNumber}:`, err.message);
-        status = 'Failed';
-        errorMessage = err.message;
+        if (isProtocolTimeoutError(err)) {
+          console.warn(`Protocol timeout for ${contact.phoneNumber}, retrying once after ${sendRetryDelayMs}ms...`);
+          if (sendRetryDelayMs > 0) {
+            await delay(sendRetryDelayMs);
+          }
+
+          try {
+            if (currentCampaign.mediaUrl) {
+              const absoluteMediaPath = resolveMediaPath(currentCampaign.mediaUrl);
+              if (!fs.existsSync(absoluteMediaPath)) {
+                throw new Error(`Media file not found on disk: ${currentCampaign.mediaUrl}`);
+              }
+
+              const media = MessageMedia.fromFilePath(absoluteMediaPath);
+              await client.sendMessage(chatId, media, {
+                caption: personalizedMessage,
+              });
+            } else {
+              await client.sendMessage(chatId, personalizedMessage);
+            }
+          } catch (retryErr) {
+            console.error(`Retry failed for ${contact.phoneNumber}:`, retryErr.message);
+            status = 'Failed';
+            errorMessage = retryErr.message;
+          }
+        } else {
+          console.error(`Failed to send to ${contact.phoneNumber}:`, err.message);
+          status = 'Failed';
+          errorMessage = err.message;
+        }
       }
 
       // Save log
@@ -252,7 +285,9 @@ export const campaignWorker = new Worker(
 
       emitToUser(userIdStr, 'campaign-log', {
         campaignId,
-        log: `🏁 Campaign "${finalCampaign.campaignName}" completed successfully!`,
+        log: finalCampaign.failedCount > 0
+          ? `🏁 Campaign "${finalCampaign.campaignName}" completed with ${finalCampaign.failedCount} failures.`
+          : `🏁 Campaign "${finalCampaign.campaignName}" completed successfully!`,
       });
     }
   },

@@ -55,11 +55,18 @@ export const initWhatsAppClient = async (userId) => {
   // Setup Puppeteer options
   const headlessEnv = (process.env.PUPPETEER_HEADLESS ?? 'true').toString().trim().toLowerCase();
   const headless = !['false', '0', 'no'].includes(headlessEnv);
+  const protocolTimeoutMs = Number.parseInt(process.env.PUPPETEER_PROTOCOL_TIMEOUT_MS ?? '180000', 10);
+  const safeProtocolTimeoutMs = Number.isFinite(protocolTimeoutMs) && protocolTimeoutMs > 0
+    ? protocolTimeoutMs
+    : 180000;
   const puppeteerArgs = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'];
   const puppeteerOptions = {
     headless,
     args: puppeteerArgs,
+    protocolTimeout: safeProtocolTimeoutMs,
   };
+
+  console.log(`Launching WhatsApp browser for user ${userIdStr} with protocolTimeout=${safeProtocolTimeoutMs}ms`);
 
   if (process.env.PUPPETEER_EXECUTABLE_PATH) {
     puppeteerOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
