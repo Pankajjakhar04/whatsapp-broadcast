@@ -107,6 +107,10 @@ const ConnectWhatsAppPage: React.FC = () => {
 
 
   useEffect(() => {
+    if (!user?._id) {
+      return;
+    }
+
     // 1. Fetch current status from REST API
     const fetchStatus = async () => {
       dispatch(setSessionLoading(true));
@@ -127,10 +131,14 @@ const ConnectWhatsAppPage: React.FC = () => {
     fetchStatus();
 
     // 2. Establish Socket.IO connection for real-time status and QR updates
-    const socket: Socket = io({
+    const socketBaseUrl = import.meta.env.VITE_SOCKET_URL || undefined;
+    const socket: Socket = io(socketBaseUrl, {
+      path: '/socket.io',
+      transports: ['polling'],
       auth: {
-        userId: user?._id,
+        userId: user._id,
       },
+      withCredentials: true,
     });
 
     socket.on('connect', () => {
@@ -145,7 +153,7 @@ const ConnectWhatsAppPage: React.FC = () => {
     return () => {
       socket.disconnect();
     };
-  }, [user, dispatch]);
+  }, [user?._id, dispatch]);
 
   const handleConnect = async () => {
     setLocalLoading(true);

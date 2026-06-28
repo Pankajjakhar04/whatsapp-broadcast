@@ -54,13 +54,21 @@ const MonitorCampaignPage: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!user?._id) {
+      return;
+    }
+
     fetchCampaign();
 
     // Setup socket connection
-    const socket: Socket = io({
+    const socketBaseUrl = import.meta.env.VITE_SOCKET_URL || undefined;
+    const socket: Socket = io(socketBaseUrl, {
+      path: '/socket.io',
+      transports: ['polling'],
       auth: {
-        userId: user?._id,
+        userId: user._id,
       },
+      withCredentials: true,
     });
 
     socket.on('connect', () => {
@@ -103,7 +111,7 @@ const MonitorCampaignPage: React.FC = () => {
     return () => {
       socket.disconnect();
     };
-  }, [id, user]);
+  }, [id, user?._id]);
 
   // Auto-scroll terminal log to bottom on new log
   useEffect(() => {
