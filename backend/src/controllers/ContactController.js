@@ -1,6 +1,36 @@
 import xlsx from 'xlsx';
 import { z } from 'zod';
 
+const scientificToPlainString = (value) => {
+  const match = String(value).match(/^([+-]?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/);
+  if (!match) {
+    return String(value);
+  }
+
+  const sign = match[1] || '';
+  const intPart = match[2] || '';
+  const fracPart = match[3] || '';
+  const exponent = Number.parseInt(match[4], 10);
+
+  if (!Number.isFinite(exponent)) {
+    return String(value);
+  }
+
+  const digits = `${intPart}${fracPart}`;
+  const decimalPos = intPart.length;
+  const shiftedPos = decimalPos + exponent;
+
+  if (shiftedPos <= 0) {
+    return `${sign}0`;
+  }
+
+  if (shiftedPos >= digits.length) {
+    return `${sign}${digits}${'0'.repeat(shiftedPos - digits.length)}`;
+  }
+
+  return `${sign}${digits.slice(0, shiftedPos)}.${digits.slice(shiftedPos)}`;
+};
+
 const normalizePhoneCellValue = (value) => {
   if (value === null || value === undefined) {
     return '';
@@ -20,10 +50,7 @@ const normalizePhoneCellValue = (value) => {
 
   // Handle scientific notation values like 9.18757E+11 from CSV/Excel exports.
   if (/^[+-]?(?:\d+\.?\d*|\.\d+)[eE][+-]?\d+$/.test(raw)) {
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed)) {
-      raw = Math.trunc(parsed).toString();
-    }
+    raw = scientificToPlainString(raw).split('.')[0];
   }
 
   return raw.replace(/[^0-9]/g, '');
@@ -53,7 +80,7 @@ export const uploadContacts = async (req, res) => {
     
     // Parse worksheet to JSON array of arrays or objects
     // header: 1 returns 2D array, which is safer for varying header names
-    const rawRows = xlsx.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: '' });
+    const rawRows = xlsx.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' });
 
     if (rawRows.length < 2) {
       return res.status(400).json({ message: 'The uploaded file is empty or missing data rows' });
@@ -145,6 +172,16 @@ export const getTemplate = (req, res) => {
   ];
 
   const worksheet = xlsx.utils.json_to_sheet(data);
+  worksheet['!cols'] = [{ wch: 20 }, { wch: 20 }, { wch: 24 }, { wch: 16 }];
+  for (let row = 2; row <= data.length + 1; row++) {
+    const phoneCellAddress = `A${row}`;
+    if (worksheet[phoneCellAddress]) {
+      worksheet[phoneCellAddress].t = 's';
+      worksheet[phoneCellAddress].z = '@';
+      worksheet[phoneCellAddress].v = String(worksheet[phoneCellAddress].v ?? '');
+    }
+  }
+
   const workbook = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(workbook, worksheet, 'Contacts Template');
 

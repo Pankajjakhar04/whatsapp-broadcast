@@ -56,6 +56,15 @@ export const downloadReport = async (req, res) => {
     const workbook = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(workbook, worksheet, 'Campaign Report');
 
+    for (let row = 2; row <= reportRows.length + 1; row++) {
+      const phoneCellAddress = `B${row}`;
+      if (worksheet[phoneCellAddress]) {
+        worksheet[phoneCellAddress].t = 's';
+        worksheet[phoneCellAddress].z = '@';
+        worksheet[phoneCellAddress].v = String(worksheet[phoneCellAddress].v ?? '');
+      }
+    }
+
     // Auto-fit column widths
     const maxLen = reportRows.reduce((w, r) => {
       Object.keys(r).forEach((k, idx) => {
