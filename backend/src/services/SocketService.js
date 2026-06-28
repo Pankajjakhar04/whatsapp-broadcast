@@ -34,12 +34,25 @@ export const initSocket = (server) => {
     // Authenticate/identify user by userId passed in handshake
     const userId = socket.handshake.auth?.userId || socket.handshake.query?.userId;
 
+    const joinUserRoom = (targetUserId) => {
+      const normalizedUserId = targetUserId?.toString?.().trim();
+      if (!normalizedUserId) {
+        return;
+      }
+      socket.join(`user_${normalizedUserId}`);
+      console.log(`User ${normalizedUserId} socket connected: ${socket.id}`);
+    };
+
     if (userId) {
-      socket.join(`user_${userId}`);
-      console.log(`User ${userId} socket connected: ${socket.id}`);
+      joinUserRoom(userId);
     } else {
       console.log(`Anonymous socket connected: ${socket.id}`);
     }
+
+    socket.on('subscribe-user', (payload) => {
+      const targetUserId = payload?.userId;
+      joinUserRoom(targetUserId);
+    });
 
     socket.on('disconnect', () => {
       console.log(`Socket disconnected: ${socket.id}`);

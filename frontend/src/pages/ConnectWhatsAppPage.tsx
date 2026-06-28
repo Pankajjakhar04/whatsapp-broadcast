@@ -143,6 +143,7 @@ const ConnectWhatsAppPage: React.FC = () => {
 
     socket.on('connect', () => {
       console.log('Socket.IO connected');
+      socket.emit('subscribe-user', { userId: user._id });
     });
 
     socket.on('whatsapp-status', (data: { status: typeof status; qrCode: string }) => {

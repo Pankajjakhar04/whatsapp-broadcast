@@ -29,8 +29,15 @@ const MonitorCampaignPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
+  const seenServerLogIdsRef = useRef<Set<string>>(new Set());
 
   const { user } = useSelector((state: RootState) => state.auth);
+
+  const mapServerLog = (log: any) => {
+    const contact = log.contactId || { name: '', phoneNumber: '' };
+    const name = contact.name || contact.phoneNumber;
+    return `${log.status === 'Sent' ? '✅ Sent to' : '❌ Failed for'} ${name} (${contact.phoneNumber || ''})${log.errorMessage ? ': ' + log.errorMessage : ''}`;
+  };
 
   // Fetch campaign info on load
   const fetchCampaign = async () => {
@@ -39,10 +46,11 @@ const MonitorCampaignPage: React.FC = () => {
       setCampaign(response.data.campaign);
       
       // Load existing message logs as initial terminal data
-      const parsedLogs = response.data.logs.map((log: any) => {
-        const contact = log.contactId || { name: '', phoneNumber: '' };
-        const name = contact.name || contact.phoneNumber;
-        return `${log.status === 'Sent' ? '✅ Sent to' : '❌ Failed for'} ${name} (${contact.phoneNumber || ''})${log.errorMessage ? ': ' + log.errorMessage : ''}`;
+      const parsedLogs = (response.data.logs || []).map((log: any) => {
+        if (log?._id) {
+          seenServerLogIdsRef.current.add(log._id);
+        }
+        return mapServerLog(log);
       });
       setLogs(parsedLogs.reverse()); // Show chronologically
     } catch (err: any) {
@@ -65,6 +73,10 @@ const MonitorCampaignPage: React.FC = () => {
     const socket: Socket = io(socketBaseUrl, {
       path: '/socket.io',
       transports: ['polling'],
+      reconnection: true,
+      reconnectionAttempts: 20,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
       auth: {
         userId: user._id,
       },
@@ -73,6 +85,13 @@ const MonitorCampaignPage: React.FC = () => {
 
     socket.on('connect', () => {
       console.log('Monitor Socket connected');
+      socket.emit('subscribe-user', { userId: user._id });
+      fetchCampaign();
+    });
+
+    socket.on('reconnect', () => {
+      socket.emit('subscribe-user', { userId: user._id });
+      fetchCampaign();
     });
 
     // Listen to campaign progress
@@ -108,7 +127,37 @@ const MonitorCampaignPage: React.FC = () => {
       }
     });
 
+    // Fallback sync for missed realtime events due transient socket/network issues.
+    const pollId = window.setInterval(async () => {
+      try {
+        const response = await api.get(`/campaigns/${id}`);
+        const nextCampaign = response.data.campaign;
+        const nextLogs = response.data.logs || [];
+
+        setCampaign(nextCampaign);
+
+        const unseenMessages = nextLogs
+          .slice()
+          .reverse()
+          .filter((log: any) => {
+            if (!log?._id || seenServerLogIdsRef.current.has(log._id)) {
+              return false;
+            }
+            seenServerLogIdsRef.current.add(log._id);
+            return true;
+          })
+          .map((log: any) => mapServerLog(log));
+
+        if (unseenMessages.length > 0) {
+          setLogs((prev) => [...prev, ...unseenMessages]);
+        }
+      } catch {
+        // Ignore intermittent poll errors; socket stream may still be healthy.
+      }
+    }, 8000);
+
     return () => {
+      window.clearInterval(pollId);
       socket.disconnect();
     };
   }, [id, user?._id]);
